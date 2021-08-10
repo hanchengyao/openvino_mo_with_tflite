@@ -19,7 +19,7 @@ class ConvActFusion(BackReplacementPattern):
             nodes = [
                 ('conv', dict(kind = 'op', type = lambda tp: tp in ['Convolution', 'GroupConvolution'])),
                 ('conv_result', dict(kind = 'data')),
-                ('act_func', dict(kind = 'op', type = lambda tp: tp in ['ReLU', 'SoftMax'])),
+                ('act_func', dict(kind = 'op', type = lambda tp: tp in ['ReLU', 'ReLU6', 'SoftMax'])),
                 ('act_func_result', dict(kind= 'data')),
             ],
 
@@ -31,6 +31,7 @@ class ConvActFusion(BackReplacementPattern):
         )
 
     def replace_pattern(self, graph: Graph, match: dict):
+        # print("in my pass")
         match['conv'].out_port(0).disconnect()
         match['act_func'].out_port(0).get_connection().set_source(match['conv'].out_port(0))
 
