@@ -59,7 +59,8 @@ class Convolution(Op):
             # [Mine] add 'bias_add' and 'act_func' to the attrs of conv's xml layer
             ('bias_add', lambda node: str(node.bias_term)),
             # ('act_func', lambda node: act_func_attr_helper(node))
-            'act_func'
+            'act_func',
+            'macs',
         ]
 
     @staticmethod
@@ -245,6 +246,21 @@ class Convolution(Op):
 
         for n in node.out_nodes():
             node.out_node(n).shape = output_shape
+
+        # [Eason] compute macs for 2-d Convolution
+        if len(kernel_shape) == 4:  # now only implement macs computation for conv2d                
+            # Convolution: macs = K × K × Cin × Hout × Wout × Cout
+            if node['group'] == 1:
+                node['macs'] = kernel_shape[2] * kernel_shape[3] * input_shape[1] * output_shape[2] * output_shape[3] * output_shape[1]
+                # print(node['macs'])
+
+            # Depthwise Convolution: macs = K × K × Cin × Hout × Wout
+            elif node['group'] == input_shape[1] == node['kernel_shape'][0]:
+                node['macs'] = kernel_shape[2] * kernel_shape[3] * input_shape[1] * output_shape[2] * output_shape[3]
+                # print(node['macs'])
+
+
+
 
 
 
