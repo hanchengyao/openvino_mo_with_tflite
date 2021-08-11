@@ -34,6 +34,7 @@ class MatMul(Op):
         return [
             ('transpose_a', lambda node: bool_to_str(node, 'transpose_a')),
             ('transpose_b', lambda node: bool_to_str(node, 'transpose_b')),
+            'macs',
         ]
 
     @staticmethod
@@ -119,6 +120,12 @@ class MatMul(Op):
 
         log.debug('MatMul `{}` input shapes: {}'.format(name, [node.in_port(i).data.get_shape() for i in range(2)]))
         A_shape, B_shape = MatMul.shape_alignment(node)
+
+        # [Eason] calculate matmul macs
+        node['macs'] = np.prod(A_shape[:-1]) * np.prod(B_shape)
+        # print(A_shape, B_shape)
+        # print(node['macs'],'\n')
+
         log.debug('MatMul `{}` aligned input shapes: {}'.format(name, [A_shape, B_shape]))
 
         assert A_shape[-1] == B_shape[-2], \
