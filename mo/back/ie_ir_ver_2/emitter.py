@@ -13,6 +13,8 @@ from mo.utils.unsupported_ops import UnsupportedOps
 from mo.utils.utils import refer_to_faq_msg
 from mo.utils.version import get_version
 
+import os
+
 # defuse_stdlib provide patched version of xml.etree.ElementTree which allows to use objects from xml.etree.ElementTree
 # in a safe manner without including unsafe xml.etree.ElementTree
 ET_defused = defuse_stdlib()[ET]
@@ -21,7 +23,18 @@ SubElement = ET_defused.SubElement
 tostring = ET_defused.tostring
 
 
-def serialize_constants(graph: Graph, bin_file_name: str, data_type=np.float32):
+# [Eason] file naming cannot contain invalid char
+def valid_file_name_for_const_node(const_node_name):
+    invalid_chars_in_name = ['/', ':', '*', '?', '<', '>']
+
+    for invalid_char in invalid_chars_in_name:
+        if invalid_char in const_node_name:
+            const_node_name = '_'.join(const_node_name.split(invalid_char))
+
+    return const_node_name
+
+
+def serialize_constants(graph: Graph, bin_file_name: str, dump_numpy_dir: str, data_type=np.float32):
     """
     Found all data constants that has output edges with 'bin' attribute.
     Serialize content for such constants to a binary file with name bin_file_name in
@@ -36,10 +49,11 @@ def serialize_constants(graph: Graph, bin_file_name: str, data_type=np.float32):
     """
     bin_hashes = {}
     with open(bin_file_name, 'wb') as bin_file:
-        serialize_constants_recursively(graph, bin_file, data_type, bin_hashes)
+        serialize_constants_recursively(graph, bin_file, data_type, bin_hashes, dump_numpy_dir)
 
 
-def update_offset_size_in_const_node(node: Node):
+# [Eason] when adding 'offset' and 'size' attrs to a const node, we also dump a .npy for this const node at the meantime.
+def update_offset_size_in_const_node(node: Node, dump_numpy_dir, blob):
     assert node.kind == 'data'
     for consumer in node.out_nodes():
         if consumer.type != 'Const':
@@ -49,8 +63,12 @@ def update_offset_size_in_const_node(node: Node):
         consumer['offset'] = node.offset
         consumer['size'] = node.size
 
+        np_file_name = valid_file_name_for_const_node(consumer.name)
+        np_file_name = np_file_name + '_' + str(node.offset) + '_' + str(node.size)
+        np.save(os.path.join(dump_numpy_dir, np_file_name), blob)
 
-def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashes):
+
+def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashes, dump_numpy_dir):
     nodes = sorted(graph.nodes())
     for node in nodes:
         node = Node(graph, node)
@@ -62,10 +80,11 @@ def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashe
             blob_hash = hashlib.sha512(np.ascontiguousarray(blob).view(np.uint8)).hexdigest()
 
             if blob_hash in bin_hashes and np.array_equal(blob, bin_hashes[blob_hash]['blob']):
+                # I think this means 2 data nodes' values are the same.
                 graph.node[node.node]['offset'] = bin_hashes[blob_hash]['offset']
                 graph.node[node.node]['size'] = bin_hashes[blob_hash]['size']
                 graph.node[node.node]['blob_precision'] = np_data_type_to_precision(blob.dtype)
-                update_offset_size_in_const_node(node)
+                update_offset_size_in_const_node(node, dump_numpy_dir, blob)
             else:
                 start = bin_file.tell()
                 blob.tofile(bin_file)
@@ -77,7 +96,7 @@ def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashe
 
                 bin_hashes[blob_hash] = {'offset': graph.node[node.node]['offset'],
                                          'size': graph.node[node.node]['size'], 'blob': blob}
-                update_offset_size_in_const_node(node)
+                update_offset_size_in_const_node(node, dump_numpy_dir, blob)
 
                 assert (blob.dtype.itemsize * np.prod(node.shape) == end - start) or \
                        node.has_valid('force_shape'), node.attrs()
@@ -210,8 +229,6 @@ def serialize_element(
             try:
                 if callable(attr[1]):
                     value = attr[1](node)
-                    # if name == 'data':
-                    #     print('pass')
                 else:
                     value = node[attr[1]] if attr[1] in node else None
             except TypeError as e:
@@ -257,13 +274,10 @@ def serialize_node_attributes(
         unsupported):
     # the Result op may be marked so it should not appear in the IR. For example, refer to transformation
     # model-optimizer/extensions/back/TopKNormalizer.py
-    # print(len(schema))
-    # print(schema)
     if isinstance(node, Node) and node.soft_get('type') == 'Result' and node.has_and_set('keep_output_port'):
         return
     try:
         for s in schema:
-            # print(s)
             if not isinstance(s, tuple):
                 if s == '@ports':
                     try:
@@ -382,6 +396,7 @@ def serialize_network(graph, net_element, unsupported):
     if graph is None:
         return
     nodes = sorted(graph.nodes())
+    types_in_model = []
     for node in nodes:
         node = Node(graph, node)
         if node.kind == 'op' and (not node.has('type') or node.type is None):
@@ -390,6 +405,10 @@ def serialize_network(graph, net_element, unsupported):
         if not node.has('IE'):
             continue
         try:
+            # see all to-be-emitted op types
+            if node.type not in types_in_model:
+                types_in_model.append(node.type)
+
             serialize_node_attributes(graph, node, node.IE, layers, edges, unsupported)
         except Error as e:
             raise Error(str(e).replace('<SUB-ELEMENT>', '{} (id = {})'.format(node.soft_get('name'), node.id))) from e

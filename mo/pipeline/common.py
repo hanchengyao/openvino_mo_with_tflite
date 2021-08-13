@@ -210,7 +210,11 @@ def prepare_emit_ir(graph: Graph, data_type: str, output_dir: str, output_model_
     ir_path_suffix = "_tmp" if use_temporary_path else ""
 
     bin_file = os.path.join(output_dir, '{}{}.bin'.format(output_model_name, ir_path_suffix))
-    serialize_constants(graph, bin_file)
+    # [Eason] mkdir numpy dump directory
+    dump_numpy_dir = os.path.join(output_dir, output_model_name + '_' + graph.graph['cmd_params'].data_type)
+    if not os.path.exists(dump_numpy_dir):
+        os.mkdir(dump_numpy_dir)
+    serialize_constants(graph, bin_file, dump_numpy_dir)
 
     mean_offset = None
     mean_size = None
