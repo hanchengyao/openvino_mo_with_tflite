@@ -24,9 +24,9 @@ class GroupedConvWeightsNormalize(BackReplacementPattern):
                 ('weights', {'type': 'Const', 'kind': 'op'}),
                 ('weights_data', {'kind': 'data'}),
             ],
-            edges=[('weights', 'weights_data'), ('weights_data', 'conv', {'in':1})]  # [Mine] I add the 3rd element dict to specify the edge that
+            edges=[('weights', 'weights_data'), ('weights_data', 'conv', {'in':1})]  # [Eason]] I add the 3rd element dict to specify the edge that
                                                                                      # connects weight data to conv, because I intend to bypass DecomposeBias pass.
-                                                                                     # If bypassing it, conv will have 3 inputs. This will cause odd behavior of this pass due to it 
+                                                                                     # If bypassing it, conv will have 3 inputs. This will cause odd behavior of this pass due it 
                                                                                      # also captures bias data node.
         )
 
