@@ -12,13 +12,16 @@ from extensions.back.RemoveUselessConvert import RemoveUselessConvert
 from extensions.back.ResultRename import ResultRename
 from extensions.back.op_versioning import OpVersioning
 from extensions.ops.Cast import Cast
-from mo.back.ie_ir_ver_2.emitter import port_renumber, serialize_constants, generate_ie_ir, serialize_mean_image
+from mo.back.ie_ir_ver_2.emitter import port_renumber, serialize_constants, generate_ie_ir, serialize_mean_image, dump_numpy_files
 from mo.graph.graph import Node, Graph
 from mo.middle.passes import tensor_names, convert_data_type
 from mo.middle.passes.convert_data_type import data_type_str_to_np
 from mo.middle.passes.infer import type_infer
 from mo.middle.pattern_match import for_graph_and_each_sub_graph_recursively
 from mo.utils.error import Error
+
+# [Eason]
+from mo.utils.check_dumped_params_answer import check_dumped_params_answer
 
 
 def determined_sort(outputs: list):
@@ -210,11 +213,16 @@ def prepare_emit_ir(graph: Graph, data_type: str, output_dir: str, output_model_
     ir_path_suffix = "_tmp" if use_temporary_path else ""
 
     bin_file = os.path.join(output_dir, '{}{}.bin'.format(output_model_name, ir_path_suffix))
+    serialize_constants(graph, bin_file)
+
     # [Eason] mkdir numpy dump directory
     dump_numpy_dir = os.path.join(output_dir, output_model_name + '_' + graph.graph['cmd_params'].data_type)
     if not os.path.exists(dump_numpy_dir):
         os.mkdir(dump_numpy_dir)
-    serialize_constants(graph, bin_file, dump_numpy_dir)
+
+    # [Eason] dump numpy files after serialize_constants to know offset and size for answer checking.
+    dump_numpy_files(graph, dump_numpy_dir)
+    check_dumped_params_answer(graph, bin_file, dump_numpy_dir)
 
     mean_offset = None
     mean_size = None

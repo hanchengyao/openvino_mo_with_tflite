@@ -34,7 +34,7 @@ def valid_file_name_for_const_node(const_node_name):
     return const_node_name
 
 
-def serialize_constants(graph: Graph, bin_file_name: str, dump_numpy_dir: str, data_type=np.float32):
+def serialize_constants(graph: Graph, bin_file_name: str, data_type=np.float32):
     """
     Found all data constants that has output edges with 'bin' attribute.
     Serialize content for such constants to a binary file with name bin_file_name in
@@ -49,11 +49,10 @@ def serialize_constants(graph: Graph, bin_file_name: str, dump_numpy_dir: str, d
     """
     bin_hashes = {}
     with open(bin_file_name, 'wb') as bin_file:
-        serialize_constants_recursively(graph, bin_file, data_type, bin_hashes, dump_numpy_dir)
+        serialize_constants_recursively(graph, bin_file, data_type, bin_hashes)
 
 
-# [Eason] when adding 'offset' and 'size' attrs to a const node, we also dump a .npy for this const node at the meantime.
-def update_offset_size_in_const_node(node: Node, dump_numpy_dir, blob):
+def update_offset_size_in_const_node(node: Node, blob):
     assert node.kind == 'data'
     for consumer in node.out_nodes():
         if consumer.type != 'Const':
@@ -63,12 +62,22 @@ def update_offset_size_in_const_node(node: Node, dump_numpy_dir, blob):
         consumer['offset'] = node.offset
         consumer['size'] = node.size
 
-        np_file_name = valid_file_name_for_const_node(consumer.name)
-        np_file_name = np_file_name + '_' + str(node.offset) + '_' + str(node.size)
-        np.save(os.path.join(dump_numpy_dir, np_file_name), blob)
+
+# [Eason] dump numpy files for Const nodes
+def dump_numpy_files(graph, dump_numpy_dir):
+    for node in graph.nodes():
+        node = Node(graph, node)
+        if node.kind == 'op' and node.type == 'Const':
+            offset = node['offset']
+            size = node['size']
+            npy_file_name_prefix = valid_file_name_for_const_node(node.name)
+            npy_file_name = npy_file_name_prefix + '_' + str(offset) + '_' + str(size)
+            np.save(os.path.join(dump_numpy_dir, npy_file_name), node.value)
 
 
-def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashes, dump_numpy_dir):
+
+
+def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashes):
     nodes = sorted(graph.nodes())
     for node in nodes:
         node = Node(graph, node)
@@ -84,7 +93,7 @@ def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashe
                 graph.node[node.node]['offset'] = bin_hashes[blob_hash]['offset']
                 graph.node[node.node]['size'] = bin_hashes[blob_hash]['size']
                 graph.node[node.node]['blob_precision'] = np_data_type_to_precision(blob.dtype)
-                update_offset_size_in_const_node(node, dump_numpy_dir, blob)
+                update_offset_size_in_const_node(node, blob)
             else:
                 start = bin_file.tell()
                 blob.tofile(bin_file)
@@ -96,7 +105,7 @@ def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashe
 
                 bin_hashes[blob_hash] = {'offset': graph.node[node.node]['offset'],
                                          'size': graph.node[node.node]['size'], 'blob': blob}
-                update_offset_size_in_const_node(node, dump_numpy_dir, blob)
+                update_offset_size_in_const_node(node, blob)
 
                 assert (blob.dtype.itemsize * np.prod(node.shape) == end - start) or \
                        node.has_valid('force_shape'), node.attrs()
@@ -114,6 +123,7 @@ def serialize_constants_recursively(graph: Graph, bin_file, data_type, bin_hashe
             for sub_graph_attr_name in node.sub_graphs:
                 sub_graph = node[sub_graph_attr_name]
                 serialize_constants_recursively(sub_graph, bin_file, data_type, bin_hashes)
+
 
 
 def serialize_mean_image(bin_file_name: str, mean_data=[]):
@@ -229,6 +239,8 @@ def serialize_element(
             try:
                 if callable(attr[1]):
                     value = attr[1](node)
+                    # if name == 'data':
+                    #     print('pass')
                 else:
                     value = node[attr[1]] if attr[1] in node else None
             except TypeError as e:
@@ -274,10 +286,13 @@ def serialize_node_attributes(
         unsupported):
     # the Result op may be marked so it should not appear in the IR. For example, refer to transformation
     # model-optimizer/extensions/back/TopKNormalizer.py
+    # print(len(schema))
+    # print(schema)
     if isinstance(node, Node) and node.soft_get('type') == 'Result' and node.has_and_set('keep_output_port'):
         return
     try:
         for s in schema:
+            # print(s)
             if not isinstance(s, tuple):
                 if s == '@ports':
                     try:
@@ -412,6 +427,9 @@ def serialize_network(graph, net_element, unsupported):
             serialize_node_attributes(graph, node, node.IE, layers, edges, unsupported)
         except Error as e:
             raise Error(str(e).replace('<SUB-ELEMENT>', '{} (id = {})'.format(node.soft_get('name'), node.id))) from e
+
+    # for tp in types_in_model:
+    #     print(tp)
 
 
 def generate_ie_ir(graph: Graph, file_name: str, input_names: tuple = (), mean_offset: tuple = (),

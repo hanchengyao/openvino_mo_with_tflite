@@ -17,5 +17,5 @@ class ReLU6Extractor(FrontExtractorOp):  # map relu6 to openvino relu
 
     @classmethod
     def extract(cls, node):
-        ReLU.update_node_stat(node)
+        ReLU6.update_node_stat(node)
         return cls.enabled

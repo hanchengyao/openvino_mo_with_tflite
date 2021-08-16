@@ -1,12 +1,16 @@
 from mo.graph.graph import Graph
-from mo.middle.replacement import MiddleReplacementPattern
+from mo.back.replacement import BackReplacementPattern
 
 
-# [Eason]
-# making this a middle pass to make it run after Partial Inference
-# transformation type: generic middle pass. If enabled is true, this pass will be run.
-class CalTotalMacs(MiddleReplacementPattern):
+
+class CalculateTotalMacs(BackReplacementPattern):
     enabled = True
+
+    def run_after(self):
+        return []
+
+    def run_before(self):
+        return []
 
     # this pass sums up macs of all ops and sets it as a graph's attribute, and doesn't transform the graph
     def find_and_replace_pattern(self, graph: Graph):
