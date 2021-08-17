@@ -15,23 +15,14 @@ from mo.utils.version import get_version
 
 import os
 
+from ours.utils import valid_file_name_for_const_node
+
 # defuse_stdlib provide patched version of xml.etree.ElementTree which allows to use objects from xml.etree.ElementTree
 # in a safe manner without including unsafe xml.etree.ElementTree
 ET_defused = defuse_stdlib()[ET]
 Element = ET_defused.Element
 SubElement = ET_defused.SubElement
 tostring = ET_defused.tostring
-
-
-# [Eason] file naming cannot contain invalid char
-def valid_file_name_for_const_node(const_node_name):
-    invalid_chars_in_name = ['/', ':', '*', '?', '<', '>']
-
-    for invalid_char in invalid_chars_in_name:
-        if invalid_char in const_node_name:
-            const_node_name = '_'.join(const_node_name.split(invalid_char))
-
-    return const_node_name
 
 
 def serialize_constants(graph: Graph, bin_file_name: str, data_type=np.float32):
