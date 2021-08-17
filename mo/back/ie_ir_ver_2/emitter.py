@@ -239,8 +239,6 @@ def serialize_element(
             try:
                 if callable(attr[1]):
                     value = attr[1](node)
-                    # if name == 'data':
-                    #     print('pass')
                 else:
                     value = node[attr[1]] if attr[1] in node else None
             except TypeError as e:
@@ -286,13 +284,10 @@ def serialize_node_attributes(
         unsupported):
     # the Result op may be marked so it should not appear in the IR. For example, refer to transformation
     # model-optimizer/extensions/back/TopKNormalizer.py
-    # print(len(schema))
-    # print(schema)
     if isinstance(node, Node) and node.soft_get('type') == 'Result' and node.has_and_set('keep_output_port'):
         return
     try:
         for s in schema:
-            # print(s)
             if not isinstance(s, tuple):
                 if s == '@ports':
                     try:
@@ -307,7 +302,6 @@ def serialize_node_attributes(
                     log.warning('Unknown xml schema tag: {}'.format(s))
             else:
                 name = s[0]
-                # print(s,"\n")
                 if name == '@list':
                     serialize_meta_list(graph, node, s, parent_element, edges, unsupported)
                 elif name == '@network':
@@ -407,6 +401,10 @@ def add_meta_data(net: Element, meta_info: dict):
 def serialize_network(graph, net_element, unsupported):
     layers = SubElement(net_element, 'layers')
     layers.set('total_macs', graph.graph['total_macs'])
+    layers.set('macs_ops_proportion', graph.graph['macs_ops_proportion'])
+    layers.set('data_movement_ops_proportion', graph.graph['data_movement_ops_proportion'])
+    layers.set('params_size', graph.graph['params_size'])
+    layers.set('activations_size', graph.graph['activations_size'])
     edges = SubElement(net_element, 'edges')
     if graph is None:
         return
