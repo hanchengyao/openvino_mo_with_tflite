@@ -20,7 +20,7 @@ class ConvActFusion(BackReplacementPattern):
     def pattern(self):
         return dict(
             nodes = [
-                ('conv', dict(kind = 'op', type = lambda tp: tp in ['Convolution', 'GroupConvolution'])),
+                ('conv', dict(kind = 'op', type = lambda tp: tp in ['Convolution', 'GroupConvolution', 'ConvolutionBackpropData', 'GroupConvolutionBackpropData'])),
                 ('conv_result', dict(kind = 'data')),
                 ('act_func', dict(kind = 'op', type = lambda tp: tp in ['ReLU', 'Clamp', 'SoftMax'])),  # RuLU6 maps to Clamp in openvino
                 ('act_func_result', dict(kind= 'data')),
