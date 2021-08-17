@@ -4,7 +4,7 @@ from mo.back.replacement import BackReplacementPattern
 
 
 class CalculateTotalMacs(BackReplacementPattern):
-    enabled = True
+    enabled = False
 
     def run_after(self):
         return []
